@@ -2,6 +2,7 @@ package com.imtokyodev.apiliga.controller;
 
 import com.imtokyodev.apiliga.entity.Team;
 import com.imtokyodev.apiliga.service.LeaderboardService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api")
 public class LeaderboardController {

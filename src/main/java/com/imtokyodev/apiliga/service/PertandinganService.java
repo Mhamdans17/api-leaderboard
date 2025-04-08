@@ -14,10 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -36,90 +34,96 @@ public class PertandinganService {
     }
 
     public PertandinganResponse getPertandingan(PertandinganRequest request) {
-        log.info("Received request to create match between teamHomeId: {} and teamAwayId: {} in Liga ID: {}",
-                request.getIdTeamHome(), request.getIdTeamAway(), request.getIdLiga());
+        log.info("🏟️ [PERTANDINGAN] Memulai proses pertandingan | Request: {}", request);
 
-        // Validasi: Team home dan team away tidak boleh memiliki ID yang sama
+        // Validasi tim tidak boleh sama
         if (request.getIdTeamHome().equals(request.getIdTeamAway())) {
-            log.error("Team home and team away cannot have the same ID: {}", request.getIdTeamHome());
+            log.warn("⚠️ [PERTANDINGAN] Tim home dan away sama | ID: {}", request.getIdTeamHome());
             throw new BadRequestException("Team home dan team away tidak boleh sama");
         }
 
+        // Cari tim home
+        log.debug("🔍 [PERTANDINGAN] Mencari tim home ID: {}", request.getIdTeamHome());
         Team teamHome = teamRepository.findById(request.getIdTeamHome())
                 .orElseThrow(() -> {
-                    log.error("Team home with ID {} not found", request.getIdTeamHome());
+                    log.error("❌ [PERTANDINGAN] Tim home tidak ditemukan | ID: {}", request.getIdTeamHome());
                     return new NotFoundException("Tim home tidak ditemukan");
                 });
 
+        // Cari tim away
+        log.debug("🔍 [PERTANDINGAN] Mencari tim away ID: {}", request.getIdTeamAway());
         Team teamAway = teamRepository.findById(request.getIdTeamAway())
                 .orElseThrow(() -> {
-                    log.error("Team away with ID {} not found", request.getIdTeamAway());
+                    log.error("❌ [PERTANDINGAN] Tim away tidak ditemukan | ID: {}", request.getIdTeamAway());
                     return new NotFoundException("Tim away tidak ditemukan");
                 });
 
+        // Cari liga
+        log.debug("🔍 [PERTANDINGAN] Mencari liga ID: {}", request.getIdLiga());
         Liga liga = ligaRepository.findById(request.getIdLiga())
                 .orElseThrow(() -> {
-                    log.error("Liga with ID {} not found", request.getIdLiga());
+                    log.error("❌ [PERTANDINGAN] Liga tidak ditemukan | ID: {}", request.getIdLiga());
                     return new NotFoundException("Liga tidak ditemukan");
                 });
 
+        // Validasi tim termasuk dalam liga
         if (!teamHome.getLiga().getIdLiga().equals(liga.getIdLiga())) {
-            log.error("Team home with ID {} is not part of Liga ID {}", teamHome.getIdTeam(), liga.getIdLiga());
+            log.warn("⚠️ [PERTANDINGAN] Tim home tidak dalam liga | Team ID: {} | Liga ID: {}",
+                    teamHome.getIdTeam(), liga.getIdLiga());
             throw new BadRequestException("Tim home tidak termasuk dalam liga ini");
         }
 
         if (!teamAway.getLiga().getIdLiga().equals(liga.getIdLiga())) {
-            log.error("Team away with ID {} is not part of Liga ID {}", teamAway.getIdTeam(), liga.getIdLiga());
+            log.warn("⚠️ [PERTANDINGAN] Tim away tidak dalam liga | Team ID: {} | Liga ID: {}",
+                    teamAway.getIdTeam(), liga.getIdLiga());
             throw new BadRequestException("Tim away tidak termasuk dalam liga ini");
         }
 
-        // Cek apakah kedua tim sudah bertanding 2 kali
+        // Cek jumlah pertandingan
+        log.debug("🧮 [PERTANDINGAN] Menghitung pertandingan antara {} vs {}",
+                teamHome.getNamaTeam(), teamAway.getNamaTeam());
         int jumlahPertandingan = pertandinganRepository.countPertandinganBetweenTeams(
                 teamHome.getIdTeam(), teamAway.getIdTeam());
+
         if (jumlahPertandingan >= 2) {
-            log.error("Teams {} and {} have already played 2 times", teamHome.getNamaTeam(), teamAway.getNamaTeam());
-            throw new BadRequestException("Tim " + teamHome.getNamaTeam() + " dan " + teamAway.getNamaTeam() +
-                    " sudah bertanding 2 kali");
+            log.warn("⛔ [PERTANDINGAN] Sudah bertanding 2x | {} vs {}",
+                    teamHome.getNamaTeam(), teamAway.getNamaTeam());
+            throw new BadRequestException("Tim " + teamHome.getNamaTeam() + " dan " +
+                    teamAway.getNamaTeam() + " sudah bertanding 2 kali");
         }
 
-        // Update poin, jumlah menang, dan jumlah kalah
-        String resultMessage = "";  // Variable untuk menyimpan pesan hasil pertandingan
+        // Proses hasil pertandingan
+        String resultMessage;
         if (request.getSkorHome() > request.getSkorAway()) {
-            // Tim home menang
+            // Home menang
             teamHome.setPoin(teamHome.getPoin() + 3);
             teamHome.setJumlahMenang(teamHome.getJumlahMenang() + 1);
             teamAway.setJumlahKalah(teamAway.getJumlahKalah() + 1);
-
-            // Simpan perubahan
-            teamRepository.save(teamHome);
-            teamRepository.save(teamAway);
-
-            log.info("Team home {} wins, points updated. {} points", teamHome.getNamaTeam(), teamHome.getPoin());
             resultMessage = "Pertandingan dimenangkan oleh " + teamHome.getNamaTeam();
+            log.info("🥇 [PERTANDINGAN] {} menang | Skor: {}-{}",
+                    teamHome.getNamaTeam(), request.getSkorHome(), request.getSkorAway());
         } else if (request.getSkorHome() < request.getSkorAway()) {
-            // Tim away menang
+            // Away menang
             teamAway.setPoin(teamAway.getPoin() + 3);
             teamAway.setJumlahMenang(teamAway.getJumlahMenang() + 1);
             teamHome.setJumlahKalah(teamHome.getJumlahKalah() + 1);
-            
-            // Simpan perubahan
-            teamRepository.save(teamHome);
-            teamRepository.save(teamAway);
-            log.info("Team away {} wins, points updated. {} points", teamAway.getNamaTeam(), teamAway.getPoin());
             resultMessage = "Pertandingan dimenangkan oleh " + teamAway.getNamaTeam();
+            log.info("🥇 [PERTANDINGAN] {} menang | Skor: {}-{}",
+                    teamAway.getNamaTeam(), request.getSkorAway(), request.getSkorHome());
         } else {
             // Seri
             teamHome.setPoin(teamHome.getPoin() + 1);
             teamAway.setPoin(teamAway.getPoin() + 1);
-            teamAway.setJumlahImbang(teamAway.getJumlahImbang()+1);
-            teamHome.setJumlahImbang(teamHome.getJumlahImbang()+1);
-
-            // Simpan perubahan
-            teamRepository.save(teamHome);
-            teamRepository.save(teamAway);
-            log.info("The match between {} and {} is a draw", teamHome.getNamaTeam(), teamAway.getNamaTeam());
-            resultMessage = "Pertandingan berakhir imbang antara " + teamHome.getNamaTeam() + " dan " + teamAway.getNamaTeam();
+            teamHome.setJumlahImbang(teamHome.getJumlahImbang() + 1);
+            teamAway.setJumlahImbang(teamAway.getJumlahImbang() + 1);
+            resultMessage = "Pertandingan berakhir imbang";
+            log.info("🤝 [PERTANDINGAN] Imbang | Skor: {}-{}",
+                    request.getSkorHome(), request.getSkorAway());
         }
+
+        // Simpan perubahan tim
+        teamRepository.saveAll(List.of(teamHome, teamAway));
+        log.debug("💾 [PERTANDINGAN] Poin tim berhasil diperbarui");
 
         // Buat pertandingan baru
         Pertandingan pertandingan = new Pertandingan();
@@ -130,71 +134,83 @@ public class PertandinganService {
         pertandingan.setLiga(liga);
 
         pertandingan = pertandinganRepository.save(pertandingan);
-        log.info("Match between {} and {} successfully saved with match ID: {}",
-                teamHome.getNamaTeam(), teamAway.getNamaTeam(), pertandingan.getIdPertandingan());
+        log.info("✅ [PERTANDINGAN] Pertandingan tersimpan | ID: {} | {} vs {} {}-{}",
+                pertandingan.getIdPertandingan(),
+                teamHome.getNamaTeam(),
+                teamAway.getNamaTeam(),
+                pertandingan.getSkorHome(),
+                pertandingan.getSkorAway());
 
         // Buat response
         PertandinganResponse response = new PertandinganResponse();
         response.setIdPertandingan(pertandingan.getIdPertandingan());
-        response.setIdTeamHome(pertandingan.getTeamHome().getIdTeam());
-        response.setNamaTeamHome(pertandingan.getTeamHome().getNamaTeam());
-        response.setIdTeamAway(pertandingan.getTeamAway().getIdTeam());
-        response.setNamaTeamAway(pertandingan.getTeamAway().getNamaTeam());
+        response.setIdTeamHome(teamHome.getIdTeam());
+        response.setNamaTeamHome(teamHome.getNamaTeam());
+        response.setIdTeamAway(teamAway.getIdTeam());
+        response.setNamaTeamAway(teamAway.getNamaTeam());
         response.setSkorHome(pertandingan.getSkorHome());
         response.setSkorAway(pertandingan.getSkorAway());
-        response.setIdLiga(pertandingan.getLiga().getIdLiga());
-        response.setMessage(resultMessage);  // Masukkan hasil pertandingan ke dalam pesan
+        response.setIdLiga(liga.getIdLiga());
+        response.setMessage(resultMessage);
 
-        // Log response
-        log.info("Response for match creation: {}", response);
-
+        log.debug("📤 [PERTANDINGAN] Response: {}", response);
         return response;
     }
 
     public ResponseEntity<?> checkMatch(Long idLiga) {
+        log.info("🔍 [CHECK-MATCH] Memeriksa pertandingan liga ID: {}", idLiga);
+
         List<Team> teams = teamRepository.findByLigaIdLiga(idLiga);
         if (teams.isEmpty()) {
+            log.warn("⚠️ [CHECK-MATCH] Liga kosong | ID: {}", idLiga);
             throw new NotFoundException("Tidak ada team didalam liga ini");
         }
 
         List<Map<String, String>> result = new ArrayList<>();
         boolean semuaPertandinganSelesai = true;
+        Set<Long> teamsWithRemainingMatches = new HashSet<>(); // Untuk melacak tim yang masih ada pertandingan
 
+        log.info("🧮 [CHECK-MATCH] Memeriksa {} tim di liga", teams.size());
         for (int i = 0; i < teams.size(); i++) {
             for (int j = i + 1; j < teams.size(); j++) {
                 Team team1 = teams.get(i);
                 Team team2 = teams.get(j);
 
-                if (team1.getIdTeam().equals(team2.getIdTeam())) {
-                    continue;
-                }
+                if (team1.getIdTeam().equals(team2.getIdTeam())) continue;
 
                 int jumlahPertandingan = pertandinganRepository.countPertandinganBetweenTeams(
                         team1.getIdTeam(), team2.getIdTeam());
 
-                // Jika belum bertemu 2 kali, tambahkan ke hasil
                 if (jumlahPertandingan < 2) {
                     Map<String, String> pair = new HashMap<>();
-                    pair.put("idTeam1", team1.getIdTeam().toString()); // ID tim 1
-                    pair.put("namaTeam1", team1.getNamaTeam()); // Nama tim 1
-                    pair.put("idTeam2", team2.getIdTeam().toString()); // ID tim 2
-                    pair.put("namaTeam2", team2.getNamaTeam()); // Nama tim 2
-                    pair.put("sisaPertandingan", String.valueOf(2 - jumlahPertandingan)); // Sisa pertandingan
+                    pair.put("idTeam1", team1.getIdTeam().toString());
+                    pair.put("namaTeam1", team1.getNamaTeam());
+                    pair.put("idTeam2", team2.getIdTeam().toString());
+                    pair.put("namaTeam2", team2.getNamaTeam());
+                    pair.put("sisaPertandingan", String.valueOf(2 - jumlahPertandingan));
                     result.add(pair);
 
-                    semuaPertandinganSelesai = false; // Masih ada pertandingan yang belum selesai
+                    semuaPertandinganSelesai = false;
+                    teamsWithRemainingMatches.add(team1.getIdTeam());
+                    teamsWithRemainingMatches.add(team2.getIdTeam());
+
+                    log.info("⚽ [CHECK-MATCH] Pertandingan tersisa: {} vs {} ({}x)",
+                            team1.getNamaTeam(), team2.getNamaTeam(), 2 - jumlahPertandingan);
                 }
             }
         }
 
-        // Jika semua pertandingan sudah selesai, kembalikan pesan khusus
         if (semuaPertandinganSelesai) {
-            Map<String, String> response = new HashMap<>();
-            response.put("message", "Pertandingan di liga ini sudah selesai");
-            return ResponseEntity.ok(response);
+            log.info("✅ [CHECK-MATCH] SEMUA PERTANDINGAN SELESAI | Liga ID: {}", idLiga);
+            return ResponseEntity.ok(Map.of("message", "Pertandingan di liga ini sudah selesai"));
         }
 
-        // Jika masih ada pertandingan yang belum selesai, kembalikan daftar pasangan tim
+        // Log jumlah tim yang masih ada pertandingan
+        log.info("📊 [CHECK-MATCH] STATISTIK: {} pertandingan tersisa | {} tim masih memiliki jadwal pertandingan | Liga ID: {}",
+                result.size(),
+                teamsWithRemainingMatches.size(),
+                idLiga);
+
         return ResponseEntity.ok(result);
     }
 }

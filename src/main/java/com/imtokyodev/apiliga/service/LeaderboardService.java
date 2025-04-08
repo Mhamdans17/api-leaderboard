@@ -20,29 +20,56 @@ public class LeaderboardService {
     }
 
     public List<Team> getLeaderboard(Long idLiga) {
-        log.info("Id Liga: {}", idLiga);
+        log.info("🏆 [LEADERBOARD] Memulai proses leaderboard | Liga ID: {}", idLiga);
+
+        log.debug("🔍 [LEADERBOARD] Mencari tim untuk liga ID: {}", idLiga);
         List<Team> teams = teamRepository.findByLigaIdLiga(idLiga);
 
-        // Jika tidak ada tim yang ditemukan, lempar NotFoundException
         if (teams.isEmpty()) {
-            log.warn("No teams found for Liga ID: {}", idLiga);
+            log.warn("⚠️ [LEADERBOARD] Tidak ada tim ditemukan | Liga ID: {}", idLiga);
             throw new NotFoundException("No teams found for Liga ID: " + idLiga);
         } else {
-            // Menyortir tim berdasarkan poin (dari yang tertinggi ke terendah)
-            log.info("Sorting {} teams based on points", teams.size());
+            log.info("✅ [LEADERBOARD] Ditemukan {} tim | Liga ID: {}", teams.size(), idLiga);
         }
 
-        // Menyortir tim berdasarkan poin
+        // Log semua tim sebelum sorting
+        log.info("📋 [LEADERBOARD] Daftar Tim Sebelum Sorting:");
+        teams.forEach(team ->
+                log.info("   - {}: {} poin (M:{} S:{} K:{})",
+                        team.getNamaTeam(),
+                        team.getPoin(),
+                        team.getJumlahMenang(),
+                        team.getJumlahImbang(),
+                        team.getJumlahKalah())
+        );
+
+        log.debug("📊 [LEADERBOARD] Memulai sorting berdasarkan poin");
         List<Team> sortedTeams = teams.stream()
                 .sorted(Comparator.comparingInt(Team::getPoin).reversed())
                 .collect(Collectors.toList());
 
-        // Menambahkan log response dengan informasi tentang leaderboard
-        log.info("Leaderboard generated for Liga ID {}: {} teams, top team: {} with {} points",
-                idLiga,
-                sortedTeams.size(),
-                sortedTeams.isEmpty() ? "N/A" : sortedTeams.get(0).getNamaTeam(),
-                sortedTeams.isEmpty() ? "N/A" : sortedTeams.get(0).getPoin());
+        // Log semua tim setelah sorting
+        log.info("🏅 [LEADERBOARD] Hasil Leaderboard:");
+        for (int i = 0; i < sortedTeams.size(); i++) {
+            Team team = sortedTeams.get(i);
+            log.info("{}. {} - {} poin (M:{} S:{} K:{})",
+                    i + 1,
+                    team.getNamaTeam(),
+                    team.getPoin(),
+                    team.getJumlahMenang(),
+                    team.getJumlahImbang(),
+                    team.getJumlahKalah());
+        }
+
+        // Log summary
+        if (!sortedTeams.isEmpty()) {
+            Team topTeam = sortedTeams.get(0);
+            log.info("🎯 [LEADERBOARD] Summary | Liga ID: {} | Jumlah Tim: {} | Top Team: {} ({} poin)",
+                    idLiga,
+                    sortedTeams.size(),
+                    topTeam.getNamaTeam(),
+                    topTeam.getPoin());
+        }
 
         return sortedTeams;
     }
