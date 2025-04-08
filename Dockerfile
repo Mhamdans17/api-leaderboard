@@ -1,13 +1,20 @@
-# Stage 1 : Base Image Maven from docker hub
+# Stage 1: Build with Maven
 FROM maven:3.8.5-openjdk-17 AS builder
-# Set Working Directory
+
 WORKDIR /app
-# Add or Copy file pom.xml
-ADD ./pom.xml /app
-# Add or Copy file source code
-ADD ./src /app/src/
-# Build Use Maven Clean and Package
-RUN mvn clean package
+# Copy ONLY pom.xml first (untuk caching layer)
+COPY pom.xml .
+# Download dependencies (cached selama pom.xml tidak berubah)
+RUN mvn dependency:go-offline -B
+
+# Copy source code
+COPY src ./src
+# Build aplikasi
+RUN mvn clean package -DskipTests
+
+# Stage 2: Run with JRE
+FROM openjdk:17-slim
+WORKDIR /app
 # Stage 2 : Base Image SDK Java:17 from docker hub
 FROM openjdk:17-slim
 # Set Working Directory
