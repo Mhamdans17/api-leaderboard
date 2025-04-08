@@ -13,7 +13,7 @@ FROM openjdk:17-slim
 # Set Working Directory
 WORKDIR /app
 # Copy .jar From Builder
-COPY --from=builder /app/target/Apiliga-0.0.1-SNAPSHOT.jar /app/Apiliga-0.0.1-SNAPSHOT.jar
+COPY --from=builder target/Apiliga-0.0.1-SNAPSHOT.jar /app/Apiliga-0.0.1-SNAPSHOT.jar
 # Set Port to Expose
 EXPOSE 8080
 # Set Time Zone
