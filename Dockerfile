@@ -1,8 +1,3 @@
-FROM eclipse-temurin:17-jdk-alpine
-COPY target/Apiliga-0.0.1-SNAPSHOT.jar.jar app.jar
-ENTRYPOINT ["java", "-jar", "/app.jar"]
-
-
 # Stage 1 : Base Image Maven from docker hub
 FROM maven:3.8.5-openjdk-17 AS builder
 # Set Working Directory
