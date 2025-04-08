@@ -11,7 +11,13 @@ import com.imtokyodev.apiliga.repository.LigaRepository;
 import com.imtokyodev.apiliga.repository.PertandinganRepository;
 import com.imtokyodev.apiliga.repository.TeamRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @Slf4j
@@ -32,6 +38,12 @@ public class PertandinganService {
     public PertandinganResponse getPertandingan(PertandinganRequest request) {
         log.info("Received request to create match between teamHomeId: {} and teamAwayId: {} in Liga ID: {}",
                 request.getIdTeamHome(), request.getIdTeamAway(), request.getIdLiga());
+
+        // Validasi: Team home dan team away tidak boleh memiliki ID yang sama
+        if (request.getIdTeamHome().equals(request.getIdTeamAway())) {
+            log.error("Team home and team away cannot have the same ID: {}", request.getIdTeamHome());
+            throw new BadRequestException("Team home dan team away tidak boleh sama");
+        }
 
         Team teamHome = teamRepository.findById(request.getIdTeamHome())
                 .orElseThrow(() -> {
@@ -71,23 +83,42 @@ public class PertandinganService {
         }
 
         // Update poin, jumlah menang, dan jumlah kalah
+        String resultMessage = "";  // Variable untuk menyimpan pesan hasil pertandingan
         if (request.getSkorHome() > request.getSkorAway()) {
             // Tim home menang
             teamHome.setPoin(teamHome.getPoin() + 3);
             teamHome.setJumlahMenang(teamHome.getJumlahMenang() + 1);
             teamAway.setJumlahKalah(teamAway.getJumlahKalah() + 1);
+
+            // Simpan perubahan
+            teamRepository.save(teamHome);
+            teamRepository.save(teamAway);
+
             log.info("Team home {} wins, points updated. {} points", teamHome.getNamaTeam(), teamHome.getPoin());
+            resultMessage = "Pertandingan dimenangkan oleh " + teamHome.getNamaTeam();
         } else if (request.getSkorHome() < request.getSkorAway()) {
             // Tim away menang
             teamAway.setPoin(teamAway.getPoin() + 3);
             teamAway.setJumlahMenang(teamAway.getJumlahMenang() + 1);
             teamHome.setJumlahKalah(teamHome.getJumlahKalah() + 1);
+            
+            // Simpan perubahan
+            teamRepository.save(teamHome);
+            teamRepository.save(teamAway);
             log.info("Team away {} wins, points updated. {} points", teamAway.getNamaTeam(), teamAway.getPoin());
+            resultMessage = "Pertandingan dimenangkan oleh " + teamAway.getNamaTeam();
         } else {
             // Seri
             teamHome.setPoin(teamHome.getPoin() + 1);
             teamAway.setPoin(teamAway.getPoin() + 1);
+            teamAway.setJumlahImbang(teamAway.getJumlahImbang()+1);
+            teamHome.setJumlahImbang(teamHome.getJumlahImbang()+1);
+
+            // Simpan perubahan
+            teamRepository.save(teamHome);
+            teamRepository.save(teamAway);
             log.info("The match between {} and {} is a draw", teamHome.getNamaTeam(), teamAway.getNamaTeam());
+            resultMessage = "Pertandingan berakhir imbang antara " + teamHome.getNamaTeam() + " dan " + teamAway.getNamaTeam();
         }
 
         // Buat pertandingan baru
@@ -112,11 +143,58 @@ public class PertandinganService {
         response.setSkorHome(pertandingan.getSkorHome());
         response.setSkorAway(pertandingan.getSkorAway());
         response.setIdLiga(pertandingan.getLiga().getIdLiga());
-        response.setMessage("Pertandingan berhasil dimulai");
+        response.setMessage(resultMessage);  // Masukkan hasil pertandingan ke dalam pesan
 
         // Log response
         log.info("Response for match creation: {}", response);
 
         return response;
+    }
+
+    public ResponseEntity<?> checkMatch(Long idLiga) {
+        List<Team> teams = teamRepository.findByLigaIdLiga(idLiga);
+        if (teams.isEmpty()) {
+            throw new NotFoundException("Tidak ada team didalam liga ini");
+        }
+
+        List<Map<String, String>> result = new ArrayList<>();
+        boolean semuaPertandinganSelesai = true;
+
+        for (int i = 0; i < teams.size(); i++) {
+            for (int j = i + 1; j < teams.size(); j++) {
+                Team team1 = teams.get(i);
+                Team team2 = teams.get(j);
+
+                if (team1.getIdTeam().equals(team2.getIdTeam())) {
+                    continue;
+                }
+
+                int jumlahPertandingan = pertandinganRepository.countPertandinganBetweenTeams(
+                        team1.getIdTeam(), team2.getIdTeam());
+
+                // Jika belum bertemu 2 kali, tambahkan ke hasil
+                if (jumlahPertandingan < 2) {
+                    Map<String, String> pair = new HashMap<>();
+                    pair.put("idTeam1", team1.getIdTeam().toString()); // ID tim 1
+                    pair.put("namaTeam1", team1.getNamaTeam()); // Nama tim 1
+                    pair.put("idTeam2", team2.getIdTeam().toString()); // ID tim 2
+                    pair.put("namaTeam2", team2.getNamaTeam()); // Nama tim 2
+                    pair.put("sisaPertandingan", String.valueOf(2 - jumlahPertandingan)); // Sisa pertandingan
+                    result.add(pair);
+
+                    semuaPertandinganSelesai = false; // Masih ada pertandingan yang belum selesai
+                }
+            }
+        }
+
+        // Jika semua pertandingan sudah selesai, kembalikan pesan khusus
+        if (semuaPertandinganSelesai) {
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Pertandingan di liga ini sudah selesai");
+            return ResponseEntity.ok(response);
+        }
+
+        // Jika masih ada pertandingan yang belum selesai, kembalikan daftar pasangan tim
+        return ResponseEntity.ok(result);
     }
 }

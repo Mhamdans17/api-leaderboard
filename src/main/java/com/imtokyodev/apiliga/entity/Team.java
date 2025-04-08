@@ -21,6 +21,7 @@ public class Team {
     private int poin = 0; // Poin tim, default 0
     private int jumlahMenang = 0; // Jumlah menang, default 0
     private int jumlahKalah = 0; // Jumlah kalah, default 0
+    private int jumlahImbang = 0;
 
     @Column(nullable = false)
     private String deskripsiLiga;

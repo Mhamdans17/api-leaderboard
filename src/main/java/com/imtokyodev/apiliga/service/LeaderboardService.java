@@ -1,6 +1,7 @@
 package com.imtokyodev.apiliga.service;
 
 import com.imtokyodev.apiliga.entity.Team;
+import com.imtokyodev.apiliga.exception.NotFoundException;
 import com.imtokyodev.apiliga.repository.TeamRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,9 +22,11 @@ public class LeaderboardService {
     public List<Team> getLeaderboard(Long idLiga) {
         log.info("Id Liga: {}", idLiga);
         List<Team> teams = teamRepository.findByLigaIdLiga(idLiga);
-        // Jika tidak ada tim yang ditemukan, beri peringatan
+
+        // Jika tidak ada tim yang ditemukan, lempar NotFoundException
         if (teams.isEmpty()) {
             log.warn("No teams found for Liga ID: {}", idLiga);
+            throw new NotFoundException("No teams found for Liga ID: " + idLiga);
         } else {
             // Menyortir tim berdasarkan poin (dari yang tertinggi ke terendah)
             log.info("Sorting {} teams based on points", teams.size());
@@ -42,6 +45,5 @@ public class LeaderboardService {
                 sortedTeams.isEmpty() ? "N/A" : sortedTeams.get(0).getPoin());
 
         return sortedTeams;
-
     }
 }
